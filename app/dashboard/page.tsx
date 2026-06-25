@@ -1,5 +1,6 @@
 import { LogOut } from "lucide-react";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
@@ -46,6 +47,8 @@ export default async function DashboardPage({
   }
 
   const params = await searchParams;
+  const requestHeaders = await headers();
+  const baseUrl = getBaseUrl(requestHeaders);
   const statusFilter = parseStatusFilter(params.status);
   const categoryFilter = parseCategoryFilter(params.kategori);
   const { rows, error } = await getRsvpRows();
@@ -126,7 +129,7 @@ export default async function DashboardPage({
           <SummaryItem label="Jumlah Tamu" value={summary.guests} tone="amber" />
         </section>
 
-        <InvitationLinkGenerator />
+        <InvitationLinkGenerator baseUrl={baseUrl} />
 
         <section className="mt-5 rounded-lg border border-zinc-200 bg-white p-3 shadow-sm shadow-zinc-950/5">
           <div className="mb-3 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
@@ -185,6 +188,23 @@ export default async function DashboardPage({
       </div>
     </main>
   );
+}
+
+function getBaseUrl(requestHeaders: Headers) {
+  const host =
+    requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+
+  if (!host) {
+    return "https://domain-kamu.com";
+  }
+
+  const protocol =
+    requestHeaders.get("x-forwarded-proto") ??
+    (host.startsWith("localhost") || host.startsWith("127.0.0.1")
+      ? "http"
+      : "https");
+
+  return `${protocol}://${host}`;
 }
 
 async function getRsvpRows() {

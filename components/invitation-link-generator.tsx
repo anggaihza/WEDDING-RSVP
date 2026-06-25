@@ -7,17 +7,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { sanitizeCategory } from "@/lib/rsvp";
 
-export function InvitationLinkGenerator() {
+type InvitationLinkGeneratorProps = {
+  baseUrl: string;
+};
+
+export function InvitationLinkGenerator({
+  baseUrl,
+}: InvitationLinkGeneratorProps) {
   const [category, setCategory] = useState("");
   const [copied, setCopied] = useState(false);
   const sanitizedCategory = sanitizeCategory(category);
   const invitationLink = useMemo(() => {
-    const baseUrl =
-      typeof window === "undefined"
-        ? "https://domain-kamu.com"
-        : window.location.origin;
     return `${baseUrl}/?kategori=${encodeURIComponent(sanitizedCategory)}`;
-  }, [sanitizedCategory]);
+  }, [baseUrl, sanitizedCategory]);
 
   async function copyLink() {
     await navigator.clipboard.writeText(invitationLink);

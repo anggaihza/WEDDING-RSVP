@@ -110,26 +110,31 @@ export async function submitRsvp(
     readString(formData, "guest_count"),
     attendanceStatus
   );
+  let confirmationId = "";
 
   try {
     const supabase = getSupabaseAdmin();
     const now = new Date().toISOString();
-    const { error } = await supabase.from("wedding_rsvps").upsert(
-      {
-        name,
-        name_key: normalizeNameKey(name),
-        attendance_status: attendanceStatus,
-        guest_count: guestCount,
-        message: message || null,
-        category,
-        updated_at: now,
-      },
-      {
-        onConflict: "name_key,category",
-      }
-    );
+    const { data, error } = await supabase
+      .from("wedding_rsvps")
+      .upsert(
+        {
+          name,
+          name_key: normalizeNameKey(name),
+          attendance_status: attendanceStatus,
+          guest_count: guestCount,
+          message: message || null,
+          category,
+          updated_at: now,
+        },
+        {
+          onConflict: "name_key,category",
+        }
+      )
+      .select("id")
+      .single();
 
-    if (error) {
+    if (error || !data) {
       return {
         status: "error",
         message:
@@ -137,18 +142,16 @@ export async function submitRsvp(
       };
     }
 
+    confirmationId = data.id;
     revalidatePath("/dashboard");
-
-    return {
-      status: "success",
-      message: "Konfirmasi tersimpan. Terima kasih.",
-    };
   } catch {
     return {
       status: "error",
       message: "Konfigurasi Supabase belum siap.",
     };
   }
+
+  redirect(`/konfirmasi/berhasil?id=${encodeURIComponent(confirmationId)}`);
 }
 
 export async function loginDashboard(formData: FormData) {

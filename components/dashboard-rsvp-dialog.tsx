@@ -154,25 +154,42 @@ export function DashboardRsvpDialog({ mode, row }: DashboardRsvpDialogProps) {
 
 export function DeleteRsvpButton({ row }: { row: WeddingRsvp }) {
   return (
-    <form
-      action={deleteDashboardRsvp}
-      onSubmit={(event) => {
-        if (!window.confirm(`Hapus RSVP ${row.name}?`)) {
-          event.preventDefault();
-        }
-      }}
-    >
-      <input type="hidden" name="id" value={row.id} />
-      <Button
-        type="submit"
-        size="sm"
-        variant="destructive"
-        className="h-8"
-      >
-        <Trash2 className="size-3.5" />
-        Hapus
-      </Button>
-    </form>
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button type="button" size="sm" variant="destructive" className="h-8">
+          <Trash2 className="size-3.5" />
+          Hapus
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <div className="mb-1 flex size-10 items-center justify-center rounded-lg bg-red-50 text-red-700">
+            <Trash2 className="size-5" />
+          </div>
+          <DialogTitle>Hapus RSVP?</DialogTitle>
+          <DialogDescription>
+            Data untuk <span className="font-medium text-zinc-900">{row.name}</span>{" "}
+            akan dihapus permanen dari dashboard.
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogFooter className="mt-4">
+          <DialogClose asChild>
+            <Button type="button" variant="outline">
+              Batal
+            </Button>
+          </DialogClose>
+          <form action={deleteDashboardRsvp}>
+            <input type="hidden" name="id" value={row.id} />
+            <DialogClose asChild>
+              <Button type="submit" variant="destructive">
+                Hapus RSVP
+              </Button>
+            </DialogClose>
+          </form>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
