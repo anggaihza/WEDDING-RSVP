@@ -128,7 +128,7 @@ export function RsvpForm({ category }: RsvpFormProps) {
               position="popper"
               className="w-(--radix-select-trigger-width) min-w-(--radix-select-trigger-width) rounded-lg border border-white/15 bg-[#23070d]/95 p-1 text-white shadow-xl shadow-black/30 backdrop-blur-md"
             >
-              {[1, 2, 3, 4, 5].map((count) => (
+              {[1, 2, 3].map((count) => (
                 <SelectItem
                   key={count}
                   value={String(count)}

@@ -101,7 +101,7 @@ export function DashboardRsvpDialog({ mode, row }: DashboardRsvpDialogProps) {
                 disabled={attendanceStatus === "not_attending"}
                 className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-[#4a0b18] focus:ring-3 focus:ring-[#4a0b18]/15 disabled:bg-zinc-100 disabled:text-zinc-400"
               >
-                {[1, 2, 3, 4, 5].map((count) => (
+                {[1, 2, 3].map((count) => (
                   <option key={count} value={count}>
                     {count}
                   </option>
