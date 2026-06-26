@@ -1,37 +1,34 @@
-import { LogOut } from "lucide-react";
+import { Download, LogOut, Printer } from "lucide-react";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { logoutDashboard } from "@/app/actions";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CategoryFilterDropdown } from "@/components/category-filter-dropdown";
-import {
-  DashboardRsvpDialog,
-  DeleteRsvpButton,
-} from "@/components/dashboard-rsvp-dialog";
+import { DashboardRsvpDialog } from "@/components/dashboard-rsvp-dialog";
+import { DashboardRsvpTable } from "@/components/dashboard-rsvp-table";
+import { DashboardSearchInput } from "@/components/dashboard-search-input";
 import { InvitationLinkGenerator } from "@/components/invitation-link-generator";
 import { isDashboardAuthenticated } from "@/lib/dashboard-session";
 import {
-  formatAttendanceStatus,
-  formatCategory,
-  sanitizeCategory,
-  type AttendanceStatus,
-  type WeddingRsvp,
-} from "@/lib/rsvp";
-import { getSupabaseAdmin } from "@/lib/supabase/server";
+  applyDashboardFilters,
+  dashboardHref,
+  getCategorySummaries,
+  getDashboardRsvpRows,
+  getDashboardSummary,
+  parseDashboardFilters,
+  sortHref,
+  type DashboardSearchParams,
+  type SortKey,
+} from "@/lib/dashboard";
+import { formatCategory } from "@/lib/rsvp";
 import { cn } from "@/lib/utils";
 
 type DashboardPageProps = {
-  searchParams: Promise<{
-    status?: string | string[] | undefined;
-    kategori?: string | string[] | undefined;
-  }>;
+  searchParams: Promise<DashboardSearchParams>;
 };
-
-type StatusFilter = AttendanceStatus | "all";
 
 const dateFormatter = new Intl.DateTimeFormat("id-ID", {
   dateStyle: "medium",
@@ -49,38 +46,28 @@ export default async function DashboardPage({
   const params = await searchParams;
   const requestHeaders = await headers();
   const baseUrl = getBaseUrl(requestHeaders);
-  const statusFilter = parseStatusFilter(params.status);
-  const categoryFilter = parseCategoryFilter(params.kategori);
-  const { rows, error } = await getRsvpRows();
+  const filters = parseDashboardFilters(params);
+  const { rows, error } = await getDashboardRsvpRows();
   const categories = Array.from(new Set(rows.map((row) => row.category))).sort();
-  const filteredRows = rows.filter((row) => {
-    const statusMatches =
-      statusFilter === "all" || row.attendance_status === statusFilter;
-    const categoryMatches =
-      categoryFilter === "all" || row.category === categoryFilter;
-
-    return statusMatches && categoryMatches;
-  });
-  const summary = rows.reduce(
-    (acc, row) => {
-      acc.responses += 1;
-
-      if (row.attendance_status === "attending") {
-        acc.attending += 1;
-        acc.guests += row.guest_count;
-      } else {
-        acc.notAttending += 1;
-      }
-
-      return acc;
-    },
-    {
-      responses: 0,
-      attending: 0,
-      notAttending: 0,
-      guests: 0,
-    }
+  const filteredRows = applyDashboardFilters(rows, filters);
+  const summary = getDashboardSummary(rows);
+  const filteredSummary = getDashboardSummary(filteredRows);
+  const categorySummaries = getCategorySummaries(rows);
+  const sortLinks: Record<SortKey, string> = {
+    name: sortHref(filters, "name"),
+    attendance_status: sortHref(filters, "attendance_status"),
+    guest_count: sortHref(filters, "guest_count"),
+    category: sortHref(filters, "category"),
+    updated_at: sortHref(filters, "updated_at"),
+  };
+  const formattedUpdates = Object.fromEntries(
+    filteredRows.map((row) => [
+      row.id,
+      dateFormatter.format(new Date(row.updated_at)),
+    ])
   );
+  const exportHref = dashboardHref(filters, {}, "/api/dashboard/export");
+  const printHref = dashboardHref(filters, {}, "/dashboard/print");
 
   return (
     <main className="min-h-svh bg-zinc-100 font-sans text-zinc-950">
@@ -126,61 +113,93 @@ export default async function DashboardPage({
             value={summary.notAttending}
             tone="rose"
           />
-          <SummaryItem label="Jumlah Tamu" value={summary.guests} tone="amber" />
+          <SummaryItem label="Tamu Hadir" value={summary.guests} tone="amber" />
         </section>
+
+        {categorySummaries.length ? (
+          <CategorySummaryTable rows={categorySummaries} />
+        ) : null}
 
         <InvitationLinkGenerator baseUrl={baseUrl} />
 
-        <section className="mt-5 rounded-lg border border-zinc-200 bg-white p-3 shadow-sm shadow-zinc-950/5">
-          <div className="mb-3 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+        <section className="mt-5 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg shadow-zinc-950/5">
+          <div className="flex flex-col gap-3 border-b border-zinc-100 p-3 md:flex-row md:items-start md:justify-between md:p-4">
             <div>
               <h2 className="text-base font-semibold text-zinc-950">
                 Daftar Konfirmasi
               </h2>
               <p className="text-sm text-zinc-500">
                 Menampilkan {filteredRows.length} dari {rows.length} respon.
+                Tamu hadir pada filter ini: {filteredSummary.guests}.
               </p>
             </div>
-            <DashboardRsvpDialog mode="create" />
-          </div>
-
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="overflow-x-auto">
-              <div className="flex min-w-max gap-2">
-                <FilterLink
-                  href={dashboardHref("all", categoryFilter)}
-                  active={statusFilter === "all"}
-                >
-                  Semua
-                </FilterLink>
-                <FilterLink
-                  href={dashboardHref("attending", categoryFilter)}
-                  active={statusFilter === "attending"}
-                >
-                  Hadir
-                </FilterLink>
-                <FilterLink
-                  href={dashboardHref("not_attending", categoryFilter)}
-                  active={statusFilter === "not_attending"}
-                >
-                  Tidak Hadir
-                </FilterLink>
-              </div>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={exportHref}
+                prefetch={false}
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100"
+              >
+                <Download className="size-4" />
+                Export CSV
+              </Link>
+              <Link
+                href={printHref}
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100"
+              >
+                <Printer className="size-4" />
+                Print
+              </Link>
+              <DashboardRsvpDialog mode="create" />
             </div>
-
-            <CategoryFilterDropdown
-              categories={categories}
-              selectedCategory={categoryFilter}
-              statusFilter={statusFilter}
-            />
           </div>
-        </section>
 
-        <section className="mt-4">
+          <div className="border-b border-zinc-100 p-3">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                <DashboardSearchInput key={filters.query} filters={filters} />
+                <div className="flex min-w-max gap-2">
+                  <FilterLink
+                    href={dashboardHref(filters, { status: "all" })}
+                    active={filters.status === "all"}
+                  >
+                    Semua
+                  </FilterLink>
+                  <FilterLink
+                    href={dashboardHref(filters, { status: "attending" })}
+                    active={filters.status === "attending"}
+                  >
+                    Hadir
+                  </FilterLink>
+                  <FilterLink
+                    href={dashboardHref(filters, { status: "not_attending" })}
+                    active={filters.status === "not_attending"}
+                  >
+                    Tidak Hadir
+                  </FilterLink>
+                </div>
+              </div>
+
+              <CategoryFilterDropdown
+                categories={categories}
+                selectedCategory={filters.category}
+                statusFilter={filters.status}
+                query={filters.query}
+                sort={filters.sort}
+                direction={filters.direction}
+              />
+            </div>
+          </div>
+
           {filteredRows.length ? (
-            <RsvpTable rows={filteredRows} />
+            <DashboardRsvpTable
+              rows={filteredRows}
+              sortLinks={sortLinks}
+              currentSort={filters.sort}
+              currentDirection={filters.direction}
+              formattedUpdates={formattedUpdates}
+            />
           ) : (
-            <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500 shadow-sm">
+            <div className="p-8 text-center text-sm text-zinc-500">
               Belum ada data pada filter ini.
             </div>
           )}
@@ -207,62 +226,67 @@ function getBaseUrl(requestHeaders: Headers) {
   return `${protocol}://${host}`;
 }
 
-async function getRsvpRows() {
-  try {
-    const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
-      .from("wedding_rsvps")
-      .select("*")
-      .order("updated_at", { ascending: false });
-
-    if (error) {
-      return {
-        rows: [] as WeddingRsvp[],
-        error:
-          "Data belum bisa dibaca. Pastikan tabel wedding_rsvps sudah dibuat di Supabase.",
-      };
-    }
-
-    return {
-      rows: data ?? [],
-      error: "",
-    };
-  } catch {
-    return {
-      rows: [] as WeddingRsvp[],
-      error: "Konfigurasi Supabase belum siap.",
-    };
-  }
-}
-
-function parseStatusFilter(value: string | string[] | undefined): StatusFilter {
-  const raw = Array.isArray(value) ? value[0] : value;
-
-  if (raw === "attending" || raw === "not_attending") {
-    return raw;
-  }
-
-  return "all";
-}
-
-function parseCategoryFilter(value: string | string[] | undefined) {
-  const raw = Array.isArray(value) ? value[0] : value;
-  return raw ? sanitizeCategory(raw) : "all";
-}
-
-function dashboardHref(status: StatusFilter, category: string) {
-  const searchParams = new URLSearchParams();
-
-  if (status !== "all") {
-    searchParams.set("status", status);
-  }
-
-  if (category !== "all") {
-    searchParams.set("kategori", category);
-  }
-
-  const query = searchParams.toString();
-  return query ? `/dashboard?${query}` : "/dashboard";
+function CategorySummaryTable({
+  rows,
+}: {
+  rows: Array<{
+    category: string;
+    responses: number;
+    attending: number;
+    notAttending: number;
+    guests: number;
+  }>;
+}) {
+  return (
+    <section className="mt-4 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm shadow-zinc-950/5">
+      <div className="flex items-center justify-between gap-3 border-b border-zinc-100 px-4 py-3">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-950">
+            Ringkasan Per Kategori
+          </h2>
+          <p className="text-xs text-zinc-500">
+            Total respon, status, dan jumlah tamu hadir.
+          </p>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[620px] text-sm">
+          <thead className="bg-zinc-50 text-xs uppercase tracking-[0.12em] text-zinc-500">
+            <tr>
+              <th className="px-4 py-3 text-left font-medium">Kategori</th>
+              <th className="px-4 py-3 text-right font-medium">Respon</th>
+              <th className="px-4 py-3 text-right font-medium">Hadir</th>
+              <th className="px-4 py-3 text-right font-medium">
+                Tidak Hadir
+              </th>
+              <th className="px-4 py-3 text-right font-medium">Tamu</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-100">
+            {rows.map((row) => (
+              <tr key={row.category}>
+                <td className="px-4 py-3 font-medium text-zinc-950">
+                  {formatCategory(row.category)}
+                </td>
+                <td className="px-4 py-3 text-right text-zinc-700">
+                  {row.responses}
+                </td>
+                <td className="px-4 py-3 text-right text-zinc-700">
+                  {row.attending}
+                </td>
+                <td className="px-4 py-3 text-right text-zinc-700">
+                  {row.notAttending}
+                </td>
+                <td className="px-4 py-3 text-right font-medium text-[#4a0b18]">
+                  {row.guests}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
 function SummaryItem({
@@ -319,63 +343,5 @@ function FilterLink({
     >
       {children}
     </Link>
-  );
-}
-
-function RsvpTable({ rows }: { rows: WeddingRsvp[] }) {
-  return (
-    <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg shadow-zinc-950/5">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[820px] text-sm">
-          <thead className="border-b border-[#3b0713]/20 bg-[#231316] text-xs uppercase tracking-[0.12em] text-white/70">
-            <tr>
-              <th className="px-4 py-3 text-left font-medium">Nama</th>
-              <th className="px-4 py-3 text-left font-medium">Status</th>
-              <th className="px-4 py-3 text-left font-medium">Jumlah</th>
-              <th className="px-4 py-3 text-left font-medium">Kategori</th>
-              <th className="px-4 py-3 text-left font-medium">Pesan</th>
-              <th className="px-4 py-3 text-left font-medium">Update</th>
-              <th className="px-4 py-3 text-right font-medium">Aksi</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-100">
-            {rows.map((row) => (
-              <tr key={row.id} className="hover:bg-zinc-50/80">
-                <td className="max-w-52 px-4 py-3 font-medium text-zinc-950">
-                  <span className="block truncate">{row.name}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <Badge
-                    className={cn(
-                      row.attendance_status === "attending"
-                        ? "bg-[#f7edf0] text-[#4a0b18]"
-                        : "bg-zinc-100 text-zinc-700"
-                    )}
-                  >
-                    {formatAttendanceStatus(row.attendance_status)}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3 text-zinc-700">{row.guest_count}</td>
-                <td className="px-4 py-3 text-zinc-700">
-                  {formatCategory(row.category)}
-                </td>
-                <td className="max-w-80 px-4 py-3 text-zinc-600">
-                  <span className="block truncate">{row.message || "-"}</span>
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">
-                  {dateFormatter.format(new Date(row.updated_at))}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex justify-end gap-2">
-                    <DashboardRsvpDialog mode="edit" row={row} />
-                    <DeleteRsvpButton row={row} />
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
   );
 }

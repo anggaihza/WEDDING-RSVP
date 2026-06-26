@@ -1,21 +1,13 @@
 import { ImageResponse } from "next/og";
 import { createElement } from "react";
 
+import { eventTime, eventVenueAddress, eventVenueName } from "@/lib/event";
 import {
   formatAttendanceStatus,
   formatCategory,
   type WeddingRsvp,
 } from "@/lib/rsvp";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
-
-const dateFormatter = new Intl.DateTimeFormat("id-ID", {
-  dateStyle: "full",
-  timeStyle: "short",
-  timeZone: "Asia/Jakarta",
-});
-const venueName = "Maison Grande";
-const venueAddress =
-  "Setra Duta Grande Raya No.33, Sariwangi, Parongpong, West Bandung Regency, West Java 40559.";
 
 export async function GET(
   _request: Request,
@@ -62,7 +54,6 @@ async function getRsvp(id: string) {
 function renderConfirmationImage(rsvp: WeddingRsvp) {
   const status = formatAttendanceStatus(rsvp.attendance_status);
   const category = formatCategory(rsvp.category);
-  const updatedAt = dateFormatter.format(new Date(rsvp.updated_at));
   const confirmationCode = rsvp.id.slice(0, 8).toUpperCase();
   const attending = rsvp.attendance_status === "attending";
 
@@ -262,9 +253,9 @@ function renderConfirmationImage(rsvp: WeddingRsvp) {
           },
           renderRow("Jumlah", `${rsvp.guest_count} tamu`),
           renderRow("Kategori", category),
-          renderRow("Venue", venueName),
-          renderRow("Lokasi", venueAddress),
-          renderRow("Waktu", updatedAt),
+          renderRow("Venue", eventVenueName),
+          renderRow("Lokasi", eventVenueAddress),
+          renderRow("Waktu Acara", eventTime),
           renderRow("Kode", confirmationCode),
           rsvp.message ? renderRow("Pesan", truncateText(rsvp.message, 70)) : null
         )

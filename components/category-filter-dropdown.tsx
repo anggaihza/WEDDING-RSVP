@@ -10,12 +10,18 @@ type CategoryFilterDropdownProps = {
   categories: string[];
   selectedCategory: string;
   statusFilter: StatusFilter;
+  query: string;
+  sort: string;
+  direction: string;
 };
 
 export function CategoryFilterDropdown({
   categories,
   selectedCategory,
   statusFilter,
+  query,
+  sort,
+  direction,
 }: CategoryFilterDropdownProps) {
   const router = useRouter();
 
@@ -30,8 +36,17 @@ export function CategoryFilterDropdown({
       searchParams.set("kategori", category);
     }
 
-    const query = searchParams.toString();
-    router.push(query ? `/dashboard?${query}` : "/dashboard");
+    if (query) {
+      searchParams.set("q", query);
+    }
+
+    if (sort !== "updated_at" || direction !== "desc") {
+      searchParams.set("sort", sort);
+      searchParams.set("direction", direction);
+    }
+
+    const nextQuery = searchParams.toString();
+    router.push(nextQuery ? `/dashboard?${nextQuery}` : "/dashboard");
   }
 
   return (

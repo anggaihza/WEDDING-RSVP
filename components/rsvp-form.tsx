@@ -1,10 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useActionState, useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
-  Heart,
   Loader2,
   MessageSquareText,
   Send,
@@ -50,7 +49,7 @@ export function RsvpForm({ category }: RsvpFormProps) {
   }, [state]);
 
   return (
-    <form ref={formRef} action={formAction} className="space-y-3">
+    <form ref={formRef} action={formAction} className="rsvp-form space-y-3">
       <input type="hidden" name="category" value={category} />
       <input
         type="hidden"
@@ -58,17 +57,10 @@ export function RsvpForm({ category }: RsvpFormProps) {
         value={attendanceStatus}
       />
 
-      <div className="flex items-center justify-between gap-3 rounded-lg border border-white/25 bg-black/20 px-2.5 py-1.5 text-xs text-white">
-        <span className="flex min-w-0 items-center gap-2">
-          <Heart className="size-3.5 shrink-0 text-rose-100" />
-          <span className="truncate font-medium">{formatCategory(category)}</span>
-        </span>
-        <span className="rounded-md bg-white/15 px-2 py-0.5 text-[11px] text-white/80">
-          Kategori
-        </span>
-      </div>
-
-      <div className="space-y-1">
+      <div
+        className="rsvp-field space-y-1"
+        style={{ "--rsvp-delay": "520ms" } as CSSProperties}
+      >
         <label
           htmlFor="name"
           className="flex items-center gap-1.5 text-xs font-medium text-white/90"
@@ -82,12 +74,15 @@ export function RsvpForm({ category }: RsvpFormProps) {
           autoComplete="name"
           maxLength={80}
           placeholder="Nama lengkap"
-          className="h-10 border-white/25 bg-white/0 text-white placeholder:text-white/55 focus-visible:border-amber-100"
+          className="h-10 border-white/25 bg-white/0 text-white placeholder:text-white/55 transition-all duration-300 focus-visible:-translate-y-0.5 focus-visible:border-amber-100 focus-visible:bg-white/5 focus-visible:shadow-lg focus-visible:shadow-black/15"
           required
         />
       </div>
 
-      <div className="grid grid-cols-[1fr_82px] gap-2">
+      <div
+        className="rsvp-field grid grid-cols-[1fr_82px] gap-2"
+        style={{ "--rsvp-delay": "610ms" } as CSSProperties}
+      >
         <fieldset className="space-y-1">
           <legend className="flex items-center gap-1.5 text-xs font-medium text-white/90">
             <CheckCircle2 className="size-3.5 text-amber-100" />
@@ -125,7 +120,7 @@ export function RsvpForm({ category }: RsvpFormProps) {
           >
             <SelectTrigger
               id="guest_count"
-              className="relative h-10! w-full min-w-0 justify-center rounded-lg border-white/25 bg-black/10 px-2 text-center text-xs font-medium text-white shadow-none data-[size=default]:h-10 focus-visible:border-amber-100 focus-visible:ring-3 focus-visible:ring-amber-100/35 disabled:bg-white/5 disabled:text-white/45 [&_[data-slot=select-value]]:justify-center [&_svg]:absolute [&_svg]:right-2 [&_svg]:text-white/65"
+              className="relative h-10! w-full min-w-0 justify-center rounded-lg border-white/25 bg-black/10 px-2 text-center text-xs font-medium text-white shadow-none transition-all duration-300 data-[size=default]:h-10 focus-visible:-translate-y-0.5 focus-visible:border-amber-100 focus-visible:bg-white/5 focus-visible:ring-3 focus-visible:ring-amber-100/35 disabled:bg-white/5 disabled:text-white/45 [&_[data-slot=select-value]]:justify-center [&_svg]:absolute [&_svg]:right-2 [&_svg]:text-white/65"
             >
               <SelectValue />
             </SelectTrigger>
@@ -147,7 +142,10 @@ export function RsvpForm({ category }: RsvpFormProps) {
         </div>
       </div>
 
-      <div className="space-y-1">
+      <div
+        className="rsvp-field space-y-1"
+        style={{ "--rsvp-delay": "700ms" } as CSSProperties}
+      >
         <label
           htmlFor="message"
           className="flex items-center gap-1.5 text-xs font-medium text-white/90"
@@ -160,14 +158,14 @@ export function RsvpForm({ category }: RsvpFormProps) {
           name="message"
           maxLength={500}
           placeholder="Pesan singkat"
-          className="h-10 border-white/25 bg-white/0 text-white placeholder:text-white/55 focus-visible:border-amber-100"
+          className="h-10 border-white/25 bg-white/0 text-white placeholder:text-white/55 transition-all duration-300 focus-visible:-translate-y-0.5 focus-visible:border-amber-100 focus-visible:bg-white/5 focus-visible:shadow-lg focus-visible:shadow-black/15"
         />
       </div>
 
       {state.message ? (
         <p
           className={cn(
-            "rounded-lg border px-3 py-2 text-xs",
+            "rsvp-field rounded-lg border px-3 py-2 text-xs",
             state.status === "success"
               ? "border-amber-200 bg-amber-50 text-stone-900"
               : "border-red-200 bg-red-50 text-red-900"
@@ -179,7 +177,8 @@ export function RsvpForm({ category }: RsvpFormProps) {
 
       <Button
         type="submit"
-        className="h-10 w-full bg-rose-950 text-white hover:bg-rose-900"
+        className="rsvp-field h-10 w-full bg-rose-950 text-white shadow-lg shadow-black/15 transition-all duration-300 hover:-translate-y-0.5 hover:bg-rose-900 hover:shadow-rose-950/35 active:translate-y-0 active:scale-[0.99]"
+        style={{ "--rsvp-delay": "790ms" } as CSSProperties}
         disabled={isPending}
       >
         {isPending ? (
@@ -189,6 +188,13 @@ export function RsvpForm({ category }: RsvpFormProps) {
         )}
         Kirim Konfirmasi
       </Button>
+
+      <p
+        className="rsvp-field truncate text-center text-[10px] font-medium uppercase tracking-[0.16em] text-white/55"
+        style={{ "--rsvp-delay": "860ms" } as CSSProperties}
+      >
+        Undangan untuk kategori {formatCategory(category)}
+      </p>
     </form>
   );
 }
@@ -210,10 +216,10 @@ function AttendanceButton({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "flex h-10 items-center justify-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition-colors",
+        "flex h-10 items-center justify-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]",
         active
-          ? "border-amber-200 bg-rose-950 text-white shadow-sm"
-          : "border-white/25 bg-white/0 text-white/85 hover:bg-white/10"
+          ? "border-amber-200 bg-rose-950 text-white shadow-lg shadow-black/15"
+          : "border-white/25 bg-white/0 text-white/85 hover:bg-white/10 hover:border-white/40"
       )}
     >
       {icon}

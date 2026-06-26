@@ -23,6 +23,13 @@ function readString(formData: FormData, key: string) {
   return typeof value === "string" ? value : "";
 }
 
+function readStrings(formData: FormData, key: string) {
+  return formData
+    .getAll(key)
+    .filter((value): value is string => typeof value === "string")
+    .filter(Boolean);
+}
+
 function parseAttendanceStatus(value: string): AttendanceStatus | null {
   if (value === "attending" || value === "not_attending") {
     return value;
@@ -42,7 +49,7 @@ function parseGuestCount(value: string, status: AttendanceStatus) {
     return 1;
   }
 
-  return Math.min(Math.max(parsed, 1), 10);
+  return Math.min(Math.max(parsed, 1), 5);
 }
 
 async function requireDashboardSession() {
@@ -110,17 +117,26 @@ export async function submitRsvp(
     readString(formData, "guest_count"),
     attendanceStatus
   );
+  const nameKey = normalizeNameKey(name);
   let confirmationId = "";
+  let mode = "created";
 
   try {
     const supabase = getSupabaseAdmin();
     const now = new Date().toISOString();
+    const { data: existingRsvp } = await supabase
+      .from("wedding_rsvps")
+      .select("id")
+      .eq("name_key", nameKey)
+      .eq("category", category)
+      .maybeSingle();
+
     const { data, error } = await supabase
       .from("wedding_rsvps")
       .upsert(
         {
           name,
-          name_key: normalizeNameKey(name),
+          name_key: nameKey,
           attendance_status: attendanceStatus,
           guest_count: guestCount,
           message: message || null,
@@ -143,6 +159,7 @@ export async function submitRsvp(
     }
 
     confirmationId = data.id;
+    mode = existingRsvp ? "updated" : "created";
     revalidatePath("/dashboard");
   } catch {
     return {
@@ -151,7 +168,11 @@ export async function submitRsvp(
     };
   }
 
-  redirect(`/konfirmasi/berhasil?id=${encodeURIComponent(confirmationId)}`);
+  redirect(
+    `/konfirmasi/berhasil?id=${encodeURIComponent(
+      confirmationId
+    )}&mode=${mode}`
+  );
 }
 
 export async function loginDashboard(formData: FormData) {
@@ -225,6 +246,51 @@ export async function deleteDashboardRsvp(formData: FormData) {
 
   const supabase = getSupabaseAdmin();
   const { error } = await supabase.from("wedding_rsvps").delete().eq("id", id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidatePath("/dashboard");
+}
+
+export async function bulkDeleteDashboardRsvps(formData: FormData) {
+  await requireDashboardSession();
+
+  const ids = readStrings(formData, "ids");
+
+  if (!ids.length) {
+    throw new Error("Pilih minimal satu RSVP.");
+  }
+
+  const supabase = getSupabaseAdmin();
+  const { error } = await supabase.from("wedding_rsvps").delete().in("id", ids);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidatePath("/dashboard");
+}
+
+export async function bulkUpdateDashboardRsvpCategory(formData: FormData) {
+  await requireDashboardSession();
+
+  const ids = readStrings(formData, "ids");
+  const category = sanitizeCategory(readString(formData, "category"));
+
+  if (!ids.length) {
+    throw new Error("Pilih minimal satu RSVP.");
+  }
+
+  const supabase = getSupabaseAdmin();
+  const { error } = await supabase
+    .from("wedding_rsvps")
+    .update({
+      category,
+      updated_at: new Date().toISOString(),
+    })
+    .in("id", ids);
 
   if (error) {
     throw new Error(error.message);

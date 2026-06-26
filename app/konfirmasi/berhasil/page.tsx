@@ -2,29 +2,23 @@ import { CheckCircle2, Download, Home, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import {
-  formatAttendanceStatus,
-  formatCategory,
-} from "@/lib/rsvp";
+import { eventTime } from "@/lib/event";
+import { formatAttendanceStatus, formatCategory } from "@/lib/rsvp";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 type ConfirmationSuccessPageProps = {
   searchParams: Promise<{
     id?: string | string[] | undefined;
+    mode?: string | string[] | undefined;
   }>;
 };
-
-const dateFormatter = new Intl.DateTimeFormat("id-ID", {
-  dateStyle: "full",
-  timeStyle: "short",
-  timeZone: "Asia/Jakarta",
-});
 
 export default async function ConfirmationSuccessPage({
   searchParams,
 }: ConfirmationSuccessPageProps) {
   const params = await searchParams;
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const mode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
 
   if (!id) {
     notFound();
@@ -35,6 +29,8 @@ export default async function ConfirmationSuccessPage({
   if (!rsvp) {
     notFound();
   }
+
+  const isUpdated = mode === "updated";
 
   return (
     <main className="min-h-svh bg-stone-950 font-sans text-white">
@@ -52,18 +48,16 @@ export default async function ConfirmationSuccessPage({
               Terima kasih, {rsvp.name}
             </h1>
             <p className="mt-3 text-sm leading-6 text-white/78">
-              Konfirmasi Anda sudah tersimpan. Silakan download tanda
-              konfirmasi di bawah ini.
+              {isUpdated
+                ? "Konfirmasi sebelumnya sudah diperbarui. Silakan download tanda konfirmasi terbaru di bawah ini."
+                : "Konfirmasi Anda sudah tersimpan. Silakan download tanda konfirmasi di bawah ini."}
             </p>
 
             <div className="mt-5 space-y-2 rounded-lg border border-white/15 bg-white/10 p-3 text-left text-sm">
               <InfoRow label="Status" value={formatAttendanceStatus(rsvp.attendance_status)} />
               <InfoRow label="Jumlah" value={`${rsvp.guest_count} tamu`} />
               <InfoRow label="Kategori" value={formatCategory(rsvp.category)} />
-              <InfoRow
-                label="Waktu"
-                value={dateFormatter.format(new Date(rsvp.updated_at))}
-              />
+              <InfoRow label="Waktu Acara" value={eventTime} />
             </div>
 
             <div className="mt-5 grid gap-2">
