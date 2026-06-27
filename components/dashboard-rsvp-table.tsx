@@ -8,7 +8,7 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 
 import {
   bulkDeleteDashboardRsvps,
@@ -18,6 +18,11 @@ import {
   DashboardRsvpDialog,
   DeleteRsvpButton,
 } from "@/components/dashboard-rsvp-dialog";
+import {
+  CategoryRsvpDialog,
+  type CategoryRsvpDialogRow,
+} from "@/components/category-rsvp-dialog";
+import { useDashboardToast } from "@/components/dashboard-toast-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,11 +35,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { initialDashboardActionState } from "@/lib/dashboard-action-state";
 import {
   formatAttendanceStatus,
-  formatCategory,
   type WeddingRsvp,
 } from "@/lib/rsvp";
+import { getCategoryTone, type CategoryTone } from "@/lib/category-colors";
 import { cn } from "@/lib/utils";
 
 type SortKey =
@@ -50,6 +56,8 @@ type DashboardRsvpTableProps = {
   currentSort: SortKey;
   currentDirection: "asc" | "desc";
   formattedUpdates: Record<string, string>;
+  categoryToneMap: Record<string, CategoryTone>;
+  categoryRowsByCategory: Record<string, CategoryRsvpDialogRow[]>;
 };
 
 export function DashboardRsvpTable({
@@ -58,10 +66,56 @@ export function DashboardRsvpTable({
   currentSort,
   currentDirection,
   formattedUpdates,
+  categoryToneMap,
+  categoryRowsByCategory,
 }: DashboardRsvpTableProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkUpdateState, bulkUpdateAction, isBulkUpdatePending] =
+    useActionState(
+      bulkUpdateDashboardRsvpCategory,
+      initialDashboardActionState
+    );
+  const [bulkDeleteState, bulkDeleteAction, isBulkDeletePending] =
+    useActionState(bulkDeleteDashboardRsvps, initialDashboardActionState);
+  const { showToast } = useDashboardToast();
   const selectedCount = selectedIds.length;
   const allSelected = rows.length > 0 && selectedCount === rows.length;
+
+  useEffect(() => {
+    if (bulkUpdateState.status === "idle") {
+      return;
+    }
+
+    showToast({
+      tone: bulkUpdateState.status,
+      message: bulkUpdateState.message,
+    });
+
+    if (bulkUpdateState.status === "success") {
+      const timeout = window.setTimeout(() => setSelectedIds([]), 0);
+      return () => window.clearTimeout(timeout);
+    }
+  }, [bulkUpdateState, showToast]);
+
+  useEffect(() => {
+    if (bulkDeleteState.status === "idle") {
+      return;
+    }
+
+    showToast({
+      tone: bulkDeleteState.status,
+      message: bulkDeleteState.message,
+    });
+
+    if (bulkDeleteState.status === "success") {
+      const timeout = window.setTimeout(() => {
+        setSelectedIds([]);
+        setBulkDeleteOpen(false);
+      }, 0);
+      return () => window.clearTimeout(timeout);
+    }
+  }, [bulkDeleteState, showToast]);
 
   function toggleRow(id: string, checked: boolean) {
     setSelectedIds((current) =>
@@ -87,7 +141,7 @@ export function DashboardRsvpTable({
 
         <div className="flex flex-col gap-2 md:flex-row md:items-center">
           <form
-            action={bulkUpdateDashboardRsvpCategory}
+            action={bulkUpdateAction}
             className="flex min-w-0 gap-2"
           >
             <HiddenSelectedIds ids={selectedIds} />
@@ -100,15 +154,15 @@ export function DashboardRsvpTable({
             <Button
               type="submit"
               size="sm"
-              disabled={!selectedCount}
+              disabled={!selectedCount || isBulkUpdatePending}
               className="h-9 bg-[#4a0b18] text-white hover:bg-[#5d1020]"
             >
               <Tags className="size-4" />
-              Ubah
+              {isBulkUpdatePending ? "Mengubah..." : "Ubah"}
             </Button>
           </form>
 
-          <Dialog>
+          <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
             <DialogTrigger asChild>
               <Button
                 type="button"
@@ -138,13 +192,15 @@ export function DashboardRsvpTable({
                     Batal
                   </Button>
                 </DialogClose>
-                <form action={bulkDeleteDashboardRsvps}>
+                <form action={bulkDeleteAction}>
                   <HiddenSelectedIds ids={selectedIds} />
-                  <DialogClose asChild>
-                    <Button type="submit" variant="destructive">
-                      Hapus Terpilih
-                    </Button>
-                  </DialogClose>
+                  <Button
+                    type="submit"
+                    variant="destructive"
+                    disabled={isBulkDeletePending}
+                  >
+                    {isBulkDeletePending ? "Menghapus..." : "Hapus Terpilih"}
+                  </Button>
                 </form>
               </DialogFooter>
             </DialogContent>
@@ -205,51 +261,68 @@ export function DashboardRsvpTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100">
-            {rows.map((row) => (
-              <tr key={row.id} className="hover:bg-zinc-50/80">
-                <td className="px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(row.id)}
-                    aria-label={`Pilih ${row.name}`}
-                    onChange={(event) =>
-                      toggleRow(row.id, event.target.checked)
-                    }
-                    className="size-4 rounded border-zinc-300"
-                  />
-                </td>
-                <td className="max-w-52 px-4 py-3 font-medium text-zinc-950">
-                  <span className="block truncate">{row.name}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <Badge
-                    className={cn(
-                      row.attendance_status === "attending"
-                        ? "bg-[#f7edf0] text-[#4a0b18]"
-                        : "bg-zinc-100 text-zinc-700"
-                    )}
-                  >
-                    {formatAttendanceStatus(row.attendance_status)}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3 text-zinc-700">{row.guest_count}</td>
-                <td className="px-4 py-3 text-zinc-700">
-                  {formatCategory(row.category)}
-                </td>
-                <td className="max-w-80 px-4 py-3 text-zinc-600">
-                  <span className="block truncate">{row.message || "-"}</span>
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">
-                  {formattedUpdates[row.id]}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex justify-end gap-2">
-                    <DashboardRsvpDialog mode="edit" row={row} />
-                    <DeleteRsvpButton row={row} />
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {rows.map((row) => {
+              const categoryTone =
+                categoryToneMap[row.category] ?? getCategoryTone(row.category);
+
+              return (
+                <tr
+                  key={row.id}
+                  className={cn(
+                    "border-l-4 transition-colors",
+                    categoryTone.row
+                  )}
+                >
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(row.id)}
+                      aria-label={`Pilih ${row.name}`}
+                      onChange={(event) =>
+                        toggleRow(row.id, event.target.checked)
+                      }
+                      className="size-4 rounded border-zinc-300"
+                    />
+                  </td>
+                  <td className="max-w-52 px-4 py-3 font-medium text-zinc-950">
+                    <span className="block truncate">{row.name}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge
+                      className={cn(
+                        row.attendance_status === "attending"
+                          ? "bg-[#f7edf0] text-[#4a0b18]"
+                          : "bg-zinc-100 text-zinc-700"
+                      )}
+                    >
+                      {formatAttendanceStatus(row.attendance_status)}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-zinc-700">
+                    {row.guest_count}
+                  </td>
+                  <td className="px-4 py-3">
+                    <CategoryRsvpDialog
+                      category={row.category}
+                      rows={categoryRowsByCategory[row.category] ?? []}
+                      className={categoryTone.badge}
+                    />
+                  </td>
+                  <td className="max-w-80 px-4 py-3 text-zinc-600">
+                    <span className="block truncate">{row.message || "-"}</span>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-500">
+                    {formattedUpdates[row.id]}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-end gap-2">
+                      <DashboardRsvpDialog mode="edit" row={row} />
+                      <DeleteRsvpButton row={row} />
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -291,6 +364,7 @@ function SortHead({
     <th className="px-4 py-3 text-left font-medium">
       <Link
         href={sortLinks[sortKey]}
+        scroll={false}
         className={cn(
           "inline-flex items-center gap-1.5 transition-colors hover:text-white",
           active ? "text-white" : "text-white/70"

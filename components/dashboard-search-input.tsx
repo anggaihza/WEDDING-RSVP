@@ -31,6 +31,7 @@ export function DashboardSearchInput({ filters }: DashboardSearchInputProps) {
             query: nextQuery,
             sort: filters.sort,
             direction: filters.direction,
+            page: 1,
           }),
           { scroll: false }
         );
@@ -58,6 +59,7 @@ export function DashboardSearchInput({ filters }: DashboardSearchInputProps) {
           query: "",
           sort: filters.sort,
           direction: filters.direction,
+          page: 1,
         }),
         { scroll: false }
       );
@@ -106,7 +108,7 @@ function buildDashboardUrl(filters: DashboardFilters) {
     searchParams.set("q", filters.query);
   }
 
-  if (filters.sort !== "updated_at" || filters.direction !== "desc") {
+  if (filters.sort !== "category" || filters.direction !== "asc") {
     searchParams.set("sort", filters.sort);
     searchParams.set("direction", filters.direction);
   }

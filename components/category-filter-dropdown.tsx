@@ -40,13 +40,15 @@ export function CategoryFilterDropdown({
       searchParams.set("q", query);
     }
 
-    if (sort !== "updated_at" || direction !== "desc") {
+    if (sort !== "category" || direction !== "asc") {
       searchParams.set("sort", sort);
       searchParams.set("direction", direction);
     }
 
     const nextQuery = searchParams.toString();
-    router.push(nextQuery ? `/dashboard?${nextQuery}` : "/dashboard");
+    router.push(nextQuery ? `/dashboard?${nextQuery}` : "/dashboard", {
+      scroll: false,
+    });
   }
 
   return (

@@ -23,6 +23,7 @@ export type DashboardSearchParams = {
   q?: string | string[] | undefined;
   sort?: string | string[] | undefined;
   direction?: string | string[] | undefined;
+  page?: string | string[] | undefined;
 };
 
 export type DashboardFilters = {
@@ -31,6 +32,7 @@ export type DashboardFilters = {
   query: string;
   sort: SortKey;
   direction: SortDirection;
+  page: number;
 };
 
 export type DashboardSummary = {
@@ -52,9 +54,12 @@ const defaultFilters: DashboardFilters = {
   status: "all",
   category: "all",
   query: "",
-  sort: "updated_at",
-  direction: "desc",
+  sort: "category",
+  direction: "asc",
+  page: 1,
 };
+
+export const dashboardPageSize = 25;
 
 const csvDateFormatter = new Intl.DateTimeFormat("id-ID", {
   dateStyle: "medium",
@@ -99,6 +104,7 @@ export function parseDashboardFilters(
     query: parseSearchQuery(readParam(source, "q")),
     sort: parseSortKey(readParam(source, "sort")),
     direction: parseSortDirection(readParam(source, "direction")),
+    page: parsePage(readParam(source, "page")),
   };
 }
 
@@ -168,6 +174,28 @@ export function getDashboardSummary(rows: WeddingRsvp[]): DashboardSummary {
   );
 }
 
+export function paginateDashboardRows(
+  rows: WeddingRsvp[],
+  page: number,
+  pageSize = dashboardPageSize
+) {
+  const totalRows = rows.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const currentPage = Math.min(Math.max(page, 1), totalPages);
+  const startIndex = (currentPage - 1) * pageSize;
+  const pageRows = rows.slice(startIndex, startIndex + pageSize);
+
+  return {
+    rows: pageRows,
+    page: currentPage,
+    pageSize,
+    totalRows,
+    totalPages,
+    from: totalRows ? startIndex + 1 : 0,
+    to: startIndex + pageRows.length,
+  };
+}
+
 export function getCategorySummaries(rows: WeddingRsvp[]) {
   const summaries = new Map<string, DashboardSummary>();
 
@@ -229,6 +257,10 @@ export function dashboardHref(
     searchParams.set("direction", nextFilters.direction);
   }
 
+  if (nextFilters.page > 1) {
+    searchParams.set("page", String(nextFilters.page));
+  }
+
   const query = searchParams.toString();
   return query ? `${pathname}?${query}` : pathname;
 }
@@ -241,7 +273,7 @@ export function sortHref(
   const direction =
     filters.sort === sort && filters.direction === "asc" ? "desc" : "asc";
 
-  return dashboardHref(filters, { sort, direction }, pathname);
+  return dashboardHref(filters, { sort, direction, page: 1 }, pathname);
 }
 
 export function rowsToCsv(rows: WeddingRsvp[]) {
@@ -308,7 +340,16 @@ function parseSortKey(value: string | undefined): SortKey {
 }
 
 function parseSortDirection(value: string | undefined): SortDirection {
-  return value === "asc" ? "asc" : "desc";
+  if (value === "asc" || value === "desc") {
+    return value;
+  }
+
+  return defaultFilters.direction;
+}
+
+function parsePage(value: string | undefined) {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultFilters.page;
 }
 
 function compareRows(left: WeddingRsvp, right: WeddingRsvp, sort: SortKey) {

@@ -1,13 +1,14 @@
 "use client";
 
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 
 import {
   createDashboardRsvp,
   deleteDashboardRsvp,
   updateDashboardRsvp,
 } from "@/app/actions";
+import { useDashboardToast } from "@/components/dashboard-toast-provider";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,6 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { initialDashboardActionState } from "@/lib/dashboard-action-state";
 import type { AttendanceStatus, WeddingRsvp } from "@/lib/rsvp";
 
 type DashboardRsvpDialogProps =
@@ -33,13 +35,35 @@ type DashboardRsvpDialogProps =
 
 export function DashboardRsvpDialog({ mode, row }: DashboardRsvpDialogProps) {
   const isEdit = mode === "edit";
+  const [open, setOpen] = useState(false);
   const [attendanceStatus, setAttendanceStatus] = useState<AttendanceStatus>(
-    row?.attendance_status ?? "attending"
+    row?.attendance_status ?? "attending",
   );
   const action = isEdit ? updateDashboardRsvp : createDashboardRsvp;
+  const [state, formAction, isPending] = useActionState(
+    action,
+    initialDashboardActionState,
+  );
+  const { showToast } = useDashboardToast();
+
+  useEffect(() => {
+    if (state.status === "idle") {
+      return;
+    }
+
+    showToast({
+      tone: state.status,
+      message: state.message,
+    });
+
+    if (state.status === "success") {
+      const timeout = window.setTimeout(() => setOpen(false), 0);
+      return () => window.clearTimeout(timeout);
+    }
+  }, [showToast, state]);
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button
           type="button"
@@ -51,7 +75,11 @@ export function DashboardRsvpDialog({ mode, row }: DashboardRsvpDialogProps) {
               : "bg-[#4a0b18] text-white hover:bg-[#5d1020]"
           }
         >
-          {isEdit ? <Pencil className="size-3.5" /> : <Plus className="size-4" />}
+          {isEdit ? (
+            <Pencil className="size-3.5" />
+          ) : (
+            <Plus className="size-4" />
+          )}
           {isEdit ? "Edit" : "Tambah RSVP"}
         </Button>
       </DialogTrigger>
@@ -65,7 +93,7 @@ export function DashboardRsvpDialog({ mode, row }: DashboardRsvpDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <form action={action} className="space-y-3">
+        <form action={formAction} className="space-y-3">
           {isEdit ? <input type="hidden" name="id" value={row.id} /> : null}
 
           <Field label="Nama">
@@ -101,11 +129,13 @@ export function DashboardRsvpDialog({ mode, row }: DashboardRsvpDialogProps) {
                 disabled={attendanceStatus === "not_attending"}
                 className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-[#4a0b18] focus:ring-3 focus:ring-[#4a0b18]/15 disabled:bg-zinc-100 disabled:text-zinc-400"
               >
-                {[1, 2, 3].map((count) => (
-                  <option key={count} value={count}>
-                    {count}
-                  </option>
-                ))}
+                {Array.from({ length: 20 }, (_, index) => index + 1).map(
+                  (count) => (
+                    <option key={count} value={count}>
+                      {count}
+                    </option>
+                  ),
+                )}
               </select>
             </Field>
           </div>
@@ -137,14 +167,13 @@ export function DashboardRsvpDialog({ mode, row }: DashboardRsvpDialogProps) {
                 Batal
               </Button>
             </DialogClose>
-            <DialogClose asChild>
-              <Button
-                type="submit"
-                className="bg-[#4a0b18] text-white hover:bg-[#5d1020]"
-              >
-                Simpan
-              </Button>
-            </DialogClose>
+            <Button
+              type="submit"
+              disabled={isPending}
+              className="bg-[#4a0b18] text-white hover:bg-[#5d1020]"
+            >
+              {isPending ? "Menyimpan..." : "Simpan"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -153,8 +182,31 @@ export function DashboardRsvpDialog({ mode, row }: DashboardRsvpDialogProps) {
 }
 
 export function DeleteRsvpButton({ row }: { row: WeddingRsvp }) {
+  const [open, setOpen] = useState(false);
+  const [state, formAction, isPending] = useActionState(
+    deleteDashboardRsvp,
+    initialDashboardActionState,
+  );
+  const { showToast } = useDashboardToast();
+
+  useEffect(() => {
+    if (state.status === "idle") {
+      return;
+    }
+
+    showToast({
+      tone: state.status,
+      message: state.message,
+    });
+
+    if (state.status === "success") {
+      const timeout = window.setTimeout(() => setOpen(false), 0);
+      return () => window.clearTimeout(timeout);
+    }
+  }, [showToast, state]);
+
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button type="button" size="sm" variant="destructive" className="h-8">
           <Trash2 className="size-3.5" />
@@ -168,8 +220,9 @@ export function DeleteRsvpButton({ row }: { row: WeddingRsvp }) {
           </div>
           <DialogTitle>Hapus RSVP?</DialogTitle>
           <DialogDescription>
-            Data untuk <span className="font-medium text-zinc-900">{row.name}</span>{" "}
-            akan dihapus permanen dari dashboard.
+            Data untuk{" "}
+            <span className="font-medium text-zinc-900">{row.name}</span> akan
+            dihapus permanen dari dashboard.
           </DialogDescription>
         </DialogHeader>
 
@@ -179,13 +232,11 @@ export function DeleteRsvpButton({ row }: { row: WeddingRsvp }) {
               Batal
             </Button>
           </DialogClose>
-          <form action={deleteDashboardRsvp}>
+          <form action={formAction}>
             <input type="hidden" name="id" value={row.id} />
-            <DialogClose asChild>
-              <Button type="submit" variant="destructive">
-                Hapus RSVP
-              </Button>
-            </DialogClose>
+            <Button type="submit" variant="destructive" disabled={isPending}>
+              {isPending ? "Menghapus..." : "Hapus RSVP"}
+            </Button>
           </form>
         </DialogFooter>
       </DialogContent>

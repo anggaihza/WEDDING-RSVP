@@ -9,6 +9,7 @@ import {
   isDashboardAuthenticated,
   safeStringEqual,
 } from "@/lib/dashboard-session";
+import type { DashboardActionState } from "@/lib/dashboard-action-state";
 import {
   normalizeName,
   normalizeNameKey,
@@ -30,6 +31,24 @@ function readStrings(formData: FormData, key: string) {
     .filter(Boolean);
 }
 
+function dashboardActionResult(
+  status: DashboardActionState["status"],
+  message: string
+): DashboardActionState {
+  return {
+    status,
+    message,
+    id: globalThis.crypto?.randomUUID?.() ?? String(Date.now()),
+  };
+}
+
+function dashboardActionError(error: unknown, fallback: string) {
+  return dashboardActionResult(
+    "error",
+    error instanceof Error ? error.message : fallback
+  );
+}
+
 function parseAttendanceStatus(value: string): AttendanceStatus | null {
   if (value === "attending" || value === "not_attending") {
     return value;
@@ -38,7 +57,11 @@ function parseAttendanceStatus(value: string): AttendanceStatus | null {
   return null;
 }
 
-function parseGuestCount(value: string, status: AttendanceStatus) {
+function parseGuestCount(
+  value: string,
+  status: AttendanceStatus,
+  maxGuestCount: number
+) {
   if (status === "not_attending") {
     return 0;
   }
@@ -49,7 +72,7 @@ function parseGuestCount(value: string, status: AttendanceStatus) {
     return 1;
   }
 
-  return Math.min(Math.max(parsed, 1), 5);
+  return Math.min(Math.max(parsed, 1), maxGuestCount);
 }
 
 async function requireDashboardSession() {
@@ -80,7 +103,8 @@ function readDashboardRsvpPayload(formData: FormData) {
     attendance_status: attendanceStatus,
     guest_count: parseGuestCount(
       readString(formData, "guest_count"),
-      attendanceStatus
+      attendanceStatus,
+      20
     ),
     message: message || null,
     category,
@@ -115,7 +139,8 @@ export async function submitRsvp(
 
   const guestCount = parseGuestCount(
     readString(formData, "guest_count"),
-    attendanceStatus
+    attendanceStatus,
+    3
   );
   const nameKey = normalizeNameKey(name);
   let confirmationId = "";
@@ -196,105 +221,151 @@ export async function logoutDashboard() {
   redirect("/dashboard/login");
 }
 
-export async function createDashboardRsvp(formData: FormData) {
+export async function createDashboardRsvp(
+  _previousState: DashboardActionState,
+  formData: FormData
+): Promise<DashboardActionState> {
   await requireDashboardSession();
 
-  const payload = readDashboardRsvpPayload(formData);
-  const supabase = getSupabaseAdmin();
-  const { error } = await supabase.from("wedding_rsvps").upsert(payload, {
-    onConflict: "name_key,category",
-  });
+  try {
+    const payload = readDashboardRsvpPayload(formData);
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase.from("wedding_rsvps").upsert(payload, {
+      onConflict: "name_key,category",
+    });
 
-  if (error) {
-    throw new Error(error.message);
+    if (error) {
+      return dashboardActionResult("error", error.message);
+    }
+
+    revalidatePath("/dashboard");
+    return dashboardActionResult("success", "RSVP berhasil ditambahkan.");
+  } catch (error) {
+    return dashboardActionError(error, "RSVP belum bisa ditambahkan.");
   }
-
-  revalidatePath("/dashboard");
 }
 
-export async function updateDashboardRsvp(formData: FormData) {
+export async function updateDashboardRsvp(
+  _previousState: DashboardActionState,
+  formData: FormData
+): Promise<DashboardActionState> {
   await requireDashboardSession();
 
-  const id = readString(formData, "id");
+  try {
+    const id = readString(formData, "id");
 
-  if (!id) {
-    throw new Error("ID RSVP tidak valid.");
+    if (!id) {
+      throw new Error("ID RSVP tidak valid.");
+    }
+
+    const payload = readDashboardRsvpPayload(formData);
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase
+      .from("wedding_rsvps")
+      .update(payload)
+      .eq("id", id);
+
+    if (error) {
+      return dashboardActionResult("error", error.message);
+    }
+
+    revalidatePath("/dashboard");
+    return dashboardActionResult("success", "RSVP berhasil diperbarui.");
+  } catch (error) {
+    return dashboardActionError(error, "RSVP belum bisa diperbarui.");
   }
-
-  const payload = readDashboardRsvpPayload(formData);
-  const supabase = getSupabaseAdmin();
-  const { error } = await supabase
-    .from("wedding_rsvps")
-    .update(payload)
-    .eq("id", id);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidatePath("/dashboard");
 }
 
-export async function deleteDashboardRsvp(formData: FormData) {
+export async function deleteDashboardRsvp(
+  _previousState: DashboardActionState,
+  formData: FormData
+): Promise<DashboardActionState> {
   await requireDashboardSession();
 
-  const id = readString(formData, "id");
+  try {
+    const id = readString(formData, "id");
 
-  if (!id) {
-    throw new Error("ID RSVP tidak valid.");
+    if (!id) {
+      throw new Error("ID RSVP tidak valid.");
+    }
+
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase
+      .from("wedding_rsvps")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      return dashboardActionResult("error", error.message);
+    }
+
+    revalidatePath("/dashboard");
+    return dashboardActionResult("success", "RSVP berhasil dihapus.");
+  } catch (error) {
+    return dashboardActionError(error, "RSVP belum bisa dihapus.");
   }
-
-  const supabase = getSupabaseAdmin();
-  const { error } = await supabase.from("wedding_rsvps").delete().eq("id", id);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidatePath("/dashboard");
 }
 
-export async function bulkDeleteDashboardRsvps(formData: FormData) {
+export async function bulkDeleteDashboardRsvps(
+  _previousState: DashboardActionState,
+  formData: FormData
+): Promise<DashboardActionState> {
   await requireDashboardSession();
 
-  const ids = readStrings(formData, "ids");
+  try {
+    const ids = readStrings(formData, "ids");
 
-  if (!ids.length) {
-    throw new Error("Pilih minimal satu RSVP.");
+    if (!ids.length) {
+      throw new Error("Pilih minimal satu RSVP.");
+    }
+
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase
+      .from("wedding_rsvps")
+      .delete()
+      .in("id", ids);
+
+    if (error) {
+      return dashboardActionResult("error", error.message);
+    }
+
+    revalidatePath("/dashboard");
+    return dashboardActionResult("success", `${ids.length} RSVP dihapus.`);
+  } catch (error) {
+    return dashboardActionError(error, "RSVP terpilih belum bisa dihapus.");
   }
-
-  const supabase = getSupabaseAdmin();
-  const { error } = await supabase.from("wedding_rsvps").delete().in("id", ids);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidatePath("/dashboard");
 }
 
-export async function bulkUpdateDashboardRsvpCategory(formData: FormData) {
+export async function bulkUpdateDashboardRsvpCategory(
+  _previousState: DashboardActionState,
+  formData: FormData
+): Promise<DashboardActionState> {
   await requireDashboardSession();
 
-  const ids = readStrings(formData, "ids");
-  const category = sanitizeCategory(readString(formData, "category"));
+  try {
+    const ids = readStrings(formData, "ids");
+    const category = sanitizeCategory(readString(formData, "category"));
 
-  if (!ids.length) {
-    throw new Error("Pilih minimal satu RSVP.");
+    if (!ids.length) {
+      throw new Error("Pilih minimal satu RSVP.");
+    }
+
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase
+      .from("wedding_rsvps")
+      .update({
+        category,
+        updated_at: new Date().toISOString(),
+      })
+      .in("id", ids);
+
+    if (error) {
+      return dashboardActionResult("error", error.message);
+    }
+
+    revalidatePath("/dashboard");
+    return dashboardActionResult("success", "Kategori RSVP berhasil diubah.");
+  } catch (error) {
+    return dashboardActionError(error, "Kategori RSVP belum bisa diubah.");
   }
-
-  const supabase = getSupabaseAdmin();
-  const { error } = await supabase
-    .from("wedding_rsvps")
-    .update({
-      category,
-      updated_at: new Date().toISOString(),
-    })
-    .in("id", ids);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  revalidatePath("/dashboard");
 }

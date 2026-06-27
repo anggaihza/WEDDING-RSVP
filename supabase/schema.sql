@@ -3,7 +3,7 @@ create table if not exists public.wedding_rsvps (
   name text not null,
   name_key text not null,
   attendance_status text not null check (attendance_status in ('attending', 'not_attending')),
-  guest_count integer not null default 1 check (guest_count between 0 and 10),
+  guest_count integer not null default 1 check (guest_count between 0 and 20),
   message text,
   category text not null default 'umum',
   created_at timestamptz not null default now(),
